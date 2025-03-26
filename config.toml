@@ -1,0 +1,9 @@
+[server]
+# 中心服务器地址
+address = "http://127.0.0.1:8080"
+# 客户端ID（可以是机器名或其他唯一标识）
+client_id = "client-1"
+# 本机WebSocket端口范围
+ws_port_range = [8081, 9000]
+# 最大并发连接数
+max_connections = 1000 

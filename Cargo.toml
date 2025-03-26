@@ -1,7 +1,7 @@
 [package]
-name = "APIBurner"
-version = "0.1.1"
-edition = "2025"
+name = "api-burner"
+version = "0.1.0"
+edition = "2021"
 
 
 [dependencies]
@@ -12,4 +12,14 @@ faker_rand = "0.1.1"
 rayon = "1.8"
 clap = { version = "4.4", features = ["derive"] }
 serde_json = "1.0"
-num_cpus = "1.16" 
+num_cpus = "1.16"
+actix-web = "4.0"
+actix-web-actors = "4.0"
+actix = "0.13"
+tokio-tungstenite = "0.18"
+toml = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+futures-util = "0.3"
+actix-cors = "0.6"
+local-ip-address = "0.5"
+chrono = { version = "0.4", features = ["serde"] }

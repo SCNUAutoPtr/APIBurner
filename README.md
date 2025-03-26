@@ -1,101 +1,141 @@
-# 压力测试工具
+# APIBurner
 
-这是一个基于 Rust 开发的 HTTP 压力测试工具，支持多进程、多线程并发测试，并提供实时 QPS 统计。
+APIBurner 是一个分布式 API 压测工具，支持多客户端协同压测，实时统计和报告。
 
 ## 功能特点
 
-- 支持多进程并发测试
-- 支持多线程并发测试
-- 实时 QPS 统计
-- 可配置的测试持续时间
-- 支持显示请求和响应内容
-- 支持无限制模式（自动使用所有可用系统资源）
-- 支持不等待响应模式（仅发送请求）
+- 分布式压测：支持多客户端协同压测
+- 实时统计：实时收集和展示压测数据
+- 灵活配置：支持自定义请求参数、随机数据生成
+- WebSocket 通信：使用 WebSocket 实现服务器和客户端之间的实时通信
+- 支持多种 HTTP 方法：GET、POST、PUT、DELETE 等
+- 支持自定义请求头和查询参数
+- 支持 JSON 格式的请求体
+- 支持随机字段生成
 
 ## 安装
 
-确保您的系统已安装 Rust 开发环境，然后执行：
+1. 确保已安装 Rust 开发环境（Rust 1.70 或更高版本）
+2. 克隆项目：
+   ```bash
+   git clone https://github.com/yourusername/APIBurner.git
+   cd APIBurner
+   ```
+3. 编译项目：
+   ```bash
+   cargo build --release
+   ```
 
-```bash
-cargo build --release
+## 配置
+
+在项目根目录创建 `config.toml` 文件：
+
+```toml
+[server]
+# 中心服务器地址
+address = "http://localhost:8080"
+# 客户端ID（可以是机器名或其他唯一标识）
+client_id = "client-1"
+# 本机WebSocket端口范围
+ws_port_range = [8081, 9000]
+# 最大并发连接数
+max_connections = 1000
 ```
 
 ## 使用方法
 
-### 基本用法
+### 启动服务器
 
 ```bash
-cargo run -- [参数]
+cargo run -- --mode server
+# 或使用短选项
+cargo run -- -m server
 ```
 
-### 参数说明
+服务器将在 8080 端口启动，等待客户端连接。
+
+### 启动客户端
+
+```bash
+cargo run -- --mode client
+# 或使用短选项
+cargo run -- -m client
+```
+
+客户端将：
+1. 连接到中心服务器
+2. 注册自己的 WebSocket 端口
+3. 等待服务器下发压测任务
+4. 执行压测并报告结果
+
+### 命令行参数
 
 | 参数 | 短选项 | 长选项 | 默认值 | 说明 |
 |------|--------|--------|--------|------|
-| 进程数 | -p | --processes | 4 | 并发进程数 |
-| 线程数 | -t | --threads | 10 | 每个进程的线程数 |
-| 持续时间 | -d | --duration | 60 | 测试持续时间（秒） |
-| 目标URL | -u | --url | http://10.191.31.203:9000/auth/local | 测试目标URL |
-| 显示响应 | -s | --show-response | false | 是否显示请求和响应内容 |
-| QPS窗口 | -q | --qps-window | 1 | QPS统计窗口大小（秒） |
-| 无限制模式 | -l | --unlimited | false | 使用所有可用资源运行10秒 |
-| 不等待响应 | -n | --no-response | false | 仅发送请求，不等待响应 |
+| 运行模式 | -m | --mode | client | 运行模式：server 或 client |
 
-### 使用示例
+### 下发压测任务
 
-1. 基本测试（使用默认参数）：
+使用 curl 或 Postman 向服务器发送 POST 请求：
+
 ```bash
-cargo run
+curl -X POST http://localhost:8080/assign/client-1 \
+-H "Content-Type: application/json" \
+-d '{
+  "url": "http://example.com/api",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "query_params": {},
+  "payload_template": {
+    "name": "test",
+    "age": 25
+  },
+  "duration": 60,
+  "random_fields": ["name"]
+}'
 ```
 
-2. 自定义参数测试：
-```bash
-cargo run -- -p 8 -t 20 -d 120 -u http://example.com -s
-```
+任务配置说明：
+- `url`: 目标 API 地址
+- `method`: HTTP 方法（GET、POST、PUT、DELETE）
+- `headers`: 请求头
+- `query_params`: URL 查询参数
+- `payload_template`: 请求体模板
+- `duration`: 测试持续时间（秒）
+- `random_fields`: 需要随机化的字段列表
 
-3. 无限制模式测试：
-```bash
-cargo run -- -l
-```
+## 统计信息
 
-4. 不等待响应模式测试：
-```bash
-cargo run -- -n
-```
-
-### 无限制模式说明
-
-当启用无限制模式（-l 或 --unlimited）时：
-- 进程数将自动设置为 CPU 核心数
-- 每个进程的线程数将设置为 CPU 核心数的 2 倍
-- 测试时间固定为 10 秒
-- 将使用系统所有可用资源进行测试
-
-### 不等待响应模式说明
-
-当启用不等待响应模式（-n 或 --no-response）时：
-- 请求超时时间设置为 1 毫秒
-- 不等待服务器响应
-- 可以产生更大的请求压力
-- 适合测试系统极限性能
-
-## 输出说明
-
-程序运行时会显示：
-1. 测试配置信息
-2. 实时 QPS 统计
-3. 测试结果汇总（总请求数、总耗时、平均 RPS）
+客户端会定期向服务器报告以下统计信息：
+- 总请求数
+- 成功请求数
+- 失败请求数
+- 平均响应时间
+- 最小响应时间
+- 最大响应时间
+- 错误类型统计
 
 ## 注意事项
 
-1. 无限制模式会使用系统所有可用资源，请谨慎使用
-2. 建议先用较小的并发数进行测试，再逐步增加
-3. 显示响应内容（-s）会降低测试性能，建议仅在调试时使用
-4. 不等待响应模式（-n）会产生极大的系统压力，请确保目标系统能够承受
+1. 确保服务器和客户端之间的网络连接正常
+2. 确保配置的端口未被其他程序占用
+3. 压测时注意控制并发数，避免对目标系统造成过大压力
+4. 建议在测试环境中使用，避免影响生产系统
 
-## 性能优化建议
+## 开发计划
 
-1. 根据目标服务器性能调整并发数
-2. 使用无限制模式（-l）可以快速测试系统最大性能
-3. 使用不等待响应模式（-n）可以测试系统极限性能
-4. 适当调整 QPS 统计窗口大小，以获得更准确的统计数据 
+- [ ] 添加 Web 界面，可视化展示压测结果
+- [ ] 支持更多数据格式（XML、Form 等）
+- [ ] 添加压测任务模板功能
+- [ ] 支持自定义压测脚本
+- [ ] 添加压测报告导出功能
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 许可证
+
+MIT License 
