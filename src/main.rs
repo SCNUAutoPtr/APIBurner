@@ -22,7 +22,7 @@ struct Args {
     duration: u64,
 
     /// 目标URL
-    #[arg(short, long, default_value = "http://127.0.0.1/login")]
+    #[arg(short, long, default_value = "http://10.191.31.150/sso/api/login/")]
     url: String,
 
     /// 是否显示请求和响应内容
@@ -79,8 +79,14 @@ impl QpsStats {
 async fn main() {
     let args = Args::parse();
     let counter = Arc::new(AtomicU64::new(0));
+    
     let client = Arc::new(Client::builder()
         .danger_accept_invalid_certs(true)
+        .pool_max_idle_per_host(args.threads * args.processes) // 设置每个主机的最大空闲连接数
+        .pool_idle_timeout(Duration::from_secs(60)) // 空闲连接保持60秒
+        .tcp_keepalive(Duration::from_secs(30)) // TCP保持活动状态
+        .http2_keep_alive_interval(Duration::from_secs(20)) // HTTP/2保持活动间隔
+        .http2_keep_alive_timeout(Duration::from_secs(10)) // HTTP/2保持活动超时
         .build()
         .unwrap());
 
@@ -166,4 +172,4 @@ async fn main() {
     println!("总请求数: {}", total_requests);
     println!("总耗时: {:.2}秒", duration);
     println!("平均RPS: {:.2}", rps);
-} 
+}
