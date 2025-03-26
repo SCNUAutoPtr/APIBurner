@@ -32,6 +32,14 @@ struct Args {
     /// QPS统计窗口大小（秒）
     #[arg(short, long, default_value_t = 1)]
     qps_window: u64,
+
+    /// 是否跳过预检测试
+    #[arg(long, default_value_t = false)]
+    skip_pretest: bool,
+
+    /// 是否确认已阅读免责声明
+    #[arg(long, default_value_t = false)]
+    i_agree: bool,
 }
 
 fn generate_random_string(length: usize) -> String {
@@ -43,6 +51,46 @@ fn generate_random_string(length: usize) -> String {
             CHARSET[idx] as char
         })
         .collect()
+}
+
+// 添加预检测试函数
+async fn perform_pretest(client: &Client, url: &str) -> Result<(), String> {
+    println!("执行预检测试...");
+    
+    // 测试连接是否有效
+    println!("测试目标连接性...");
+    println!("目标URL: {}", url); // 添加这行以显示实际使用的URL
+    
+    let start = Instant::now();
+    
+    // 使用reqwest::Url解析URL以确保格式正确
+    let parsed_url = match reqwest::Url::parse(url) {
+        Ok(u) => u,
+        Err(e) => return Err(format!("URL格式无效: {}", e)),
+    };
+    
+    // 使用解析后的完整URL发送请求
+    let response = match client.get(parsed_url).send().await {
+        Ok(resp) => resp,
+        Err(e) => return Err(format!("无法连接到目标URL: {}", e)),
+    };
+    
+    let status = response.status();
+    let elapsed = start.elapsed().as_millis();
+    
+    println!("目标响应状态码: {}", status);
+    println!("响应时间: {}ms", elapsed);
+    
+    if !status.is_success() && !status.is_redirection() && status != reqwest::StatusCode::UNAUTHORIZED {
+        return Err(format!("目标返回异常状态码: {}", status));
+    }
+    
+    if elapsed > 5000 {
+        println!("警告: 目标响应时间较长 ({}ms)，可能会影响压测结果", elapsed);
+    }
+    
+    println!("预检测试完成，目标可达");
+    Ok(())
 }
 
 struct QpsStats {
@@ -78,6 +126,17 @@ impl QpsStats {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
+    if !args.i_agree {
+        println!("免责声明:");
+        println!("本工具仅用于授权的性能测试和系统压力评估。");
+        println!("不当使用本工具可能导致目标系统负载过高或服务中断。");
+        println!("使用者必须确保已获得测试目标系统的授权。");
+        println!("开发者不对因使用本工具导致的任何损失或损害负责。");
+        println!("\n如果您理解并同意以上声明，请使用 --i-agree 参数重新运行。");
+        std::process::exit(1);
+    }
+
     let counter = Arc::new(AtomicU64::new(0));
     
     let client = Arc::new(Client::builder()
@@ -89,6 +148,17 @@ async fn main() {
         .http2_keep_alive_timeout(Duration::from_secs(10)) // HTTP/2保持活动超时
         .build()
         .unwrap());
+
+    if !args.skip_pretest {
+        match perform_pretest(&client, &args.url).await {
+            Ok(_) => {},
+            Err(e) => {
+                println!("预检测试失败: {}", e);
+                println!("如果您确认目标配置正确且希望继续，请使用 --skip-pretest 参数跳过此检查。");
+                std::process::exit(1);
+            }
+        }
+    }
 
     println!("开始压测...");
     println!("进程数: {}", args.processes);
