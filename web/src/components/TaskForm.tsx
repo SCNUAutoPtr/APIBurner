@@ -40,6 +40,7 @@ interface ClientInfo {
     success_count: number;
     error_count: number;
     avg_response_time: number;
+    current_qps: number;
   };
 }
 
@@ -59,6 +60,20 @@ const TaskForm: React.FC = () => {
   const [clients, setClients] = useState<ClientInfo[]>([]);
   const [tabValue, setTabValue] = useState(0);
 
+  // 添加本地状态来存储 JSON 字符串
+  const [jsonInputs, setJsonInputs] = useState({
+    headers: '{}',
+    query_params: '{}',
+    payload_template: 'null'
+  });
+
+  // 添加错误状态
+  const [jsonErrors, setJsonErrors] = useState({
+    headers: '',
+    query_params: '',
+    payload_template: ''
+  });
+
   useEffect(() => {
     const fetchClients = async () => {
       try {
@@ -70,16 +85,59 @@ const TaskForm: React.FC = () => {
     };
 
     fetchClients();
-    const interval = setInterval(fetchClients, 5000); // 每5秒更新一次
+    const interval = setInterval(fetchClients, 1000); // 每秒更新一次
     return () => clearInterval(interval);
+  }, []);
+
+  // 更新 JSON 输入处理函数
+  const handleJsonChange = (field: 'headers' | 'query_params' | 'payload_template', value: string) => {
+    setJsonInputs(prev => ({ ...prev, [field]: value }));
+    try {
+      const parsed = JSON.parse(value);
+      if (field === 'payload_template') {
+        // 确保 payload_template 是一个对象
+        if (typeof parsed === 'object' && parsed !== null) {
+          handleChange(field, parsed);
+          setJsonErrors(prev => ({ ...prev, [field]: '' }));
+        } else {
+          handleChange(field, null);
+          setJsonErrors(prev => ({ ...prev, [field]: 'payload_template 必须是一个对象' }));
+        }
+      } else {
+        handleChange(field, parsed);
+        setJsonErrors(prev => ({ ...prev, [field]: '' }));
+      }
+    } catch (error) {
+      // 保持当前值不变
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      setJsonErrors(prev => ({ ...prev, [field]: `JSON 解析错误: ${errorMessage}` }));
+      console.error(`JSON解析错误 (${field}):`, error);
+    }
+  };
+
+  // 初始化 JSON 字符串
+  useEffect(() => {
+    setJsonInputs({
+      headers: JSON.stringify(config.headers, null, 2),
+      query_params: JSON.stringify(config.query_params, null, 2),
+      payload_template: JSON.stringify(config.payload_template, null, 2)
+    });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // 在发送前确保所有 JSON 都是有效的
+      const finalConfig = {
+        ...config,
+        headers: JSON.parse(jsonInputs.headers),
+        query_params: JSON.parse(jsonInputs.query_params),
+        payload_template: JSON.parse(jsonInputs.payload_template)
+      };
+
       const response = await axios.post(
         `http://localhost:8080/assign/${clientId}`,
-        config,
+        finalConfig,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -95,9 +153,17 @@ const TaskForm: React.FC = () => {
   const handleSubmitAll = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // 在发送前确保所有 JSON 都是有效的
+      const finalConfig = {
+        ...config,
+        headers: JSON.parse(jsonInputs.headers),
+        query_params: JSON.parse(jsonInputs.query_params),
+        payload_template: JSON.parse(jsonInputs.payload_template)
+      };
+
       const response = await axios.post(
         'http://localhost:8080/assign_all',
-        config,
+        finalConfig,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -121,176 +187,174 @@ const TaskForm: React.FC = () => {
     setTabValue(newValue);
   };
 
+  // 添加 JSON 验证函数
+  const isValidJson = (str: string): boolean => {
+    try {
+      JSON.parse(str);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   return (
-    <Box sx={{ width: '100%' }}>
-      <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }}>
-        <Tab label="任务配置" />
-        <Tab label="客户端列表" />
-      </Tabs>
-
-      {tabValue === 0 && (
-        <Paper elevation={3} sx={{ p: 3, maxWidth: 600, mx: 'auto', mt: 4 }}>
-          <Typography variant="h5" gutterBottom>
-            压测任务配置
-          </Typography>
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="目标URL"
-                  value={config.url}
-                  onChange={(e) => handleChange('url', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>HTTP方法</InputLabel>
-                  <Select
-                    value={config.method}
-                    label="HTTP方法"
-                    onChange={(e) => handleChange('method', e.target.value)}
-                  >
-                    <MenuItem value="GET">GET</MenuItem>
-                    <MenuItem value="POST">POST</MenuItem>
-                    <MenuItem value="PUT">PUT</MenuItem>
-                    <MenuItem value="DELETE">DELETE</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="请求头 (JSON格式)"
-                  multiline
-                  rows={3}
-                  value={JSON.stringify(config.headers, null, 2)}
-                  onChange={(e) => {
-                    try {
-                      handleChange('headers', JSON.parse(e.target.value));
-                    } catch (error) {
-                      // 忽略无效的JSON
-                    }
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="查询参数 (JSON格式)"
-                  multiline
-                  rows={3}
-                  value={JSON.stringify(config.query_params, null, 2)}
-                  onChange={(e) => {
-                    try {
-                      handleChange('query_params', JSON.parse(e.target.value));
-                    } catch (error) {
-                      // 忽略无效的JSON
-                    }
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="请求体模板 (JSON格式)"
-                  multiline
-                  rows={4}
-                  value={JSON.stringify(config.payload_template, null, 2)}
-                  onChange={(e) => {
-                    try {
-                      handleChange('payload_template', JSON.parse(e.target.value));
-                    } catch (error) {
-                      // 忽略无效的JSON
-                    }
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="持续时间 (秒)"
-                  value={config.duration}
-                  onChange={(e) => handleChange('duration', parseInt(e.target.value))}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="随机字段 (逗号分隔)"
-                  value={config.random_fields.join(', ')}
-                  onChange={(e) => handleChange('random_fields', e.target.value.split(',').map(s => s.trim()))}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  size="large"
-                >
-                  下发任务
-                </Button>
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  onClick={handleSubmitAll}
-                  variant="contained"
-                  color="secondary"
-                  fullWidth
-                  size="large"
-                >
-                  下发到所有客户端
-                </Button>
-              </Grid>
-              {status && (
+    <Box sx={{ p: 3 }}>
+      <Grid container spacing={3}>
+        {/* 左侧：任务配置 */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              任务配置
+            </Typography>
+            <form onSubmit={handleSubmit}>
+              <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <Typography color={status.includes('成功') ? 'success.main' : 'error.main'}>
-                    {status}
-                  </Typography>
+                  <TextField
+                    fullWidth
+                    label="URL"
+                    value={config.url}
+                    onChange={(e) => handleChange('url', e.target.value)}
+                    required
+                  />
                 </Grid>
-              )}
-            </Grid>
-          </form>
-        </Paper>
-      )}
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>请求方法</InputLabel>
+                    <Select
+                      value={config.method}
+                      label="请求方法"
+                      onChange={(e) => handleChange('method', e.target.value)}
+                    >
+                      <MenuItem value="GET">GET</MenuItem>
+                      <MenuItem value="POST">POST</MenuItem>
+                      <MenuItem value="PUT">PUT</MenuItem>
+                      <MenuItem value="DELETE">DELETE</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="请求头 (JSON格式)"
+                    multiline
+                    rows={3}
+                    value={jsonInputs.headers}
+                    onChange={(e) => handleJsonChange('headers', e.target.value)}
+                    error={!isValidJson(jsonInputs.headers)}
+                    helperText={jsonErrors.headers || "例如: { 'Content-Type': 'application/json' }"}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="查询参数 (JSON格式)"
+                    multiline
+                    rows={3}
+                    value={jsonInputs.query_params}
+                    onChange={(e) => handleJsonChange('query_params', e.target.value)}
+                    error={!isValidJson(jsonInputs.query_params)}
+                    helperText={jsonErrors.query_params || "例如: { 'page': '1', 'size': '10' }"}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="请求体模板 (JSON格式)"
+                    multiline
+                    rows={4}
+                    value={jsonInputs.payload_template}
+                    onChange={(e) => handleJsonChange('payload_template', e.target.value)}
+                    error={!isValidJson(jsonInputs.payload_template)}
+                    helperText={jsonErrors.payload_template || "例如: { 'name': 'test', 'age': 18 }"}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="随机字段 (逗号分隔)"
+                    value={config.random_fields.join(', ')}
+                    onChange={(e) => handleChange('random_fields', e.target.value.split(',').map(s => s.trim()))}
+                    helperText="例如: name, age, address"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="持续时间（秒）"
+                    type="number"
+                    value={config.duration}
+                    onChange={(e) => handleChange('duration', parseInt(e.target.value))}
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    type="submit"
+                    fullWidth
+                  >
+                    发送任务
+                  </Button>
+                </Grid>
+                <Grid item xs={12}>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={handleSubmitAll}
+                    fullWidth
+                  >
+                    发送到所有客户端
+                  </Button>
+                </Grid>
+              </Grid>
+            </form>
+          </Paper>
+        </Grid>
 
-      {tabValue === 1 && (
-        <Paper elevation={3} sx={{ p: 3, mx: 'auto', mt: 4 }}>
-          <Typography variant="h5" gutterBottom>
-            客户端列表
-          </Typography>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>客户端ID</TableCell>
-                  <TableCell>连接时间</TableCell>
-                  <TableCell>最后活跃</TableCell>
-                  <TableCell>总请求数</TableCell>
-                  <TableCell>成功数</TableCell>
-                  <TableCell>失败数</TableCell>
-                  <TableCell>平均响应时间(ms)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {clients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell>{client.id}</TableCell>
-                    <TableCell>{new Date(client.connected_at).toLocaleString()}</TableCell>
-                    <TableCell>{new Date(client.last_active).toLocaleString()}</TableCell>
-                    <TableCell>{client.stats.total_requests}</TableCell>
-                    <TableCell>{client.stats.success_count}</TableCell>
-                    <TableCell>{client.stats.error_count}</TableCell>
-                    <TableCell>{client.stats.avg_response_time.toFixed(2)}</TableCell>
+        {/* 右侧：客户端列表 */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              客户端状态
+            </Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>客户端ID</TableCell>
+                    <TableCell>连接时间</TableCell>
+                    <TableCell>最后活跃</TableCell>
+                    <TableCell>QPS</TableCell>
+                    <TableCell>总请求数</TableCell>
+                    <TableCell>成功率</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {clients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell>{client.id}</TableCell>
+                      <TableCell>{new Date(client.connected_at).toLocaleString()}</TableCell>
+                      <TableCell>{new Date(client.last_active).toLocaleString()}</TableCell>
+                      <TableCell>{client.stats.current_qps.toFixed(2)}</TableCell>
+                      <TableCell>{client.stats.total_requests}</TableCell>
+                      <TableCell>
+                        {client.stats.total_requests > 0
+                          ? ((client.stats.success_count / client.stats.total_requests) * 100).toFixed(2) + '%'
+                          : '0%'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {status && (
+        <Paper sx={{ p: 2, mt: 2, bgcolor: 'background.default' }}>
+          <Typography>{status}</Typography>
         </Paper>
       )}
     </Box>

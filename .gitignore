@@ -29,3 +29,6 @@ Cargo.lock
 
 # 测试覆盖率报告
 coverage/
+web/node_modules/*
+node_modules/*
+web/dist/*
