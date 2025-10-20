@@ -1,6 +1,7 @@
 # Rust项目通用忽略文件
 
 # 编译输出目录
+/client/target/
 /target/
 
 # Rust工具链文件
@@ -29,6 +30,12 @@ Cargo.lock
 
 # 测试覆盖率报告
 coverage/
-web/node_modules/*
-node_modules/*
-web/dist/*
+
+# Node.js
+node_modules/
+server/node_modules/
+web/node_modules/
+
+# 构建产物
+web/dist/
+dist/

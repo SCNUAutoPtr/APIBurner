@@ -38,8 +38,9 @@ Author:uaih3k9x
    git clone https://github.com/yourusername/APIBurner.git
    cd APIBurner
    ```
-3. 编译项目：
+3. 编译客户端：
    ```bash
+   cd client
    cargo build --release
    ```
 
@@ -47,13 +48,15 @@ Author:uaih3k9x
 
 ### 1. 启动服务器
 ```bash
+cd server
 npm install
-node server.js
+node index.js
 ```
 
 ### 2. 启动客户端
 ```bash
-cargo run -- --mode client
+cd client
+cargo run
 ```
 
 ### 2.1 启动网页服务器
@@ -67,13 +70,10 @@ npm run dev
 
 ## 配置
 
-### 服务器配置 (config.toml)
+### 服务器配置 (config/config.toml)
 ```toml
 [server]
 address = "http://localhost:8080"
-client_id = "client-1"
-ws_port_range = [8081, 9000]
-max_connections = 1000
 ```
 
 ### 客户端配置
@@ -87,8 +87,8 @@ address = "http://127.0.0.1:8080"
 ## API 文档
 
 详细的 API 文档请参考：
-- [服务器 API 文档](server.md)
-- [客户端 API 文档](client.md)
+- [服务器 API 文档](docs/server.md)
+- [客户端 API 文档](docs/client.md)
 
 ## 压测任务配置
 

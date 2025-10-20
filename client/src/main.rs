@@ -496,7 +496,7 @@ impl APIBurnerClient {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 读取配置文件
-    let config_path = Path::new("config.toml");
+    let config_path = Path::new("../config/config.toml");
     let config_content = fs::read_to_string(config_path)
         .expect("无法读取配置文件");
     
