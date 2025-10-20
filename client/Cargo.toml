@@ -1,26 +1,30 @@
 [package]
 name = "api-burner"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
+# 优化配置
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.release-debug]
+inherits = "release"
+debug = true
+strip = false
+lto = false
 
 [dependencies]
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1.0", features = ["full"] }
-rand = "0.8"
-faker_rand = "0.1.1"
-rayon = "1.8"
-clap = { version = "4.4", features = ["derive"] }
+rand = "0.9"
 serde_json = "1.0"
 num_cpus = "1.16"
-actix-web = "4.0"
-actix-web-actors = "4.0"
-actix = "0.13"
-tokio-tungstenite = "0.18"
-toml = "0.7"
+tokio-tungstenite = "0.28"
+toml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 futures-util = "0.3"
-actix-cors = "0.6"
-local-ip-address = "0.5"
-chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4"] }

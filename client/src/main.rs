@@ -4,11 +4,11 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use rand::Rng;
+use rand::distr::Alphanumeric;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use rayon::prelude::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
@@ -128,7 +128,7 @@ impl APIBurnerClient {
                         "type": "register"
                     });
                     if let Some(sender) = self.ws_sender.lock().await.as_mut() {
-                        sender.send(Message::Text(register_msg.to_string())).await?;
+                        sender.send(Message::Text(register_msg.to_string().into())).await?;
                     }
                     println!("注册消息已发送");
 
@@ -167,7 +167,7 @@ impl APIBurnerClient {
                                     "type": "ping",
                                     "client_id": client_id
                                 });
-                                if let Err(e) = sender.send(Message::Text(ping_msg.to_string())).await {
+                                if let Err(e) = sender.send(Message::Text(ping_msg.to_string().into())).await {
                                     println!("发送心跳失败: {}", e);
                                 } else {
                                     println!("发送心跳成功");
@@ -192,7 +192,7 @@ impl APIBurnerClient {
                                         "type": "pong",
                                         "client_id": self.config.server.client_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
                                     });
-                                    sender.send(Message::Text(pong_msg.to_string())).await?;
+                                    sender.send(Message::Text(pong_msg.to_string().into())).await?;
                                 }
                                 self.last_heartbeat = Instant::now();
                             }
@@ -308,7 +308,7 @@ impl APIBurnerClient {
                     }
                 });
                 if let Some(sender) = ws_sender.lock().await.as_mut() {
-                    if let Err(e) = sender.send(Message::Text(stats_report.to_string())).await {
+                    if let Err(e) = sender.send(Message::Text(stats_report.to_string().into())).await {
                         println!("发送统计信息失败: {}", e);
                     }
                 }
@@ -430,7 +430,7 @@ impl APIBurnerClient {
     }
 
     fn randomize_payload(template: &serde_json::Value, random_fields: &[String]) -> serde_json::Value {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut result = template.clone();
 
         for field in random_fields {
@@ -440,7 +440,7 @@ impl APIBurnerClient {
             // 遍历除最后一个段以外的所有段
             for &segment in segments.iter().take(segments.len() - 1) {
                 match value {
-                    serde_json::Value::Object(ref mut map) => {
+                    serde_json::Value::Object(map) => {
                         if !map.contains_key(segment) {
                             map.insert(segment.to_string(), serde_json::Value::Object(serde_json::Map::new()));
                         }
@@ -452,34 +452,34 @@ impl APIBurnerClient {
 
             // 处理最后一个段
             if let Some(&last_segment) = segments.last() {
-                if let serde_json::Value::Object(ref mut map) = value {
+                if let serde_json::Value::Object(map) = value {
                     let random_value = match map.get(last_segment) {
                         Some(original) => match original {
                             serde_json::Value::String(_) => {
-                                let length = rng.gen_range(5..20);
+                                let length = rng.random_range(5..20);
                                 let random_string: String = (0..length)
-                                    .map(|_| rng.sample(rand::distributions::Alphanumeric) as char)
+                                    .map(|_| rng.sample(Alphanumeric) as char)
                                     .collect();
                                 serde_json::Value::String(random_string)
                             },
                             serde_json::Value::Number(n) => {
                                 if n.is_i64() {
-                                    let random_int = rng.gen_range(1..1000);
+                                    let random_int = rng.random_range(1..1000);
                                     serde_json::Value::Number(serde_json::Number::from(random_int))
                                 } else {
-                                    let random_float = rng.gen_range(0.0..100.0);
+                                    let random_float = rng.random_range(0.0..100.0);
                                     serde_json::json!(random_float)
                                 }
                             },
                             serde_json::Value::Bool(_) => {
-                                serde_json::Value::Bool(rng.gen_bool(0.5))
+                                serde_json::Value::Bool(rng.random_bool(0.5))
                             },
                             _ => original.clone(),
                         },
                         None => {
-                            let length = rng.gen_range(5..20);
+                            let length = rng.random_range(5..20);
                             let random_string: String = (0..length)
-                                .map(|_| rng.sample(rand::distributions::Alphanumeric) as char)
+                                .map(|_| rng.sample(Alphanumeric) as char)
                                 .collect();
                             serde_json::Value::String(random_string)
                         }
